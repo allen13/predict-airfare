@@ -3,15 +3,16 @@ import time
 from textwrap import dedent
 
 import dash
+import dash_table
 import dash_html_components as html
 import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
+
 from flask_caching import Cache
 import plotly.express as px
 import pandas as pd
-from snowflake.sqlalchemy import URL
-from sqlalchemy import create_engine
+
 from sklearn.linear_model import Ridge
 from sklearn.model_selection import train_test_split
 from sklearn import metrics
@@ -23,23 +24,26 @@ from load import *
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 server = app.server
 
-airfares = load_training_airfares()
+flights = load_clean_flights()
 # Build component parts
 div_alert = dbc.Spinner(html.Div(id="alert-msg"))
 query_card = dbc.Card(
     [
         html.H4("Predicted Airfare", className="card-title"),
-        dcc.Markdown(id="sql-query"),
+        dcc.Markdown(id="prediction"),
     ],
     body=True,
 )
 
+flight_table = dbc.Table.from_dataframe(flights.head(), striped=True, bordered=True, hover=True)
 controls = [
-    OptionMenu(id="airline", label="Airline", values=airfares["Airline"].unique()),
-    OptionMenu(id="stops", label="Stops", values=['1','2','3','4']),
+    OptionMenu(id="airline", label="Airline", values=flights["Airline"].unique()),
+    OptionMenu(id="stops", label="Stops", values=['0','1','2','3','4']),
+    OptionMenu(id="algorithm", label="Prediction Algorithm", values=['Linear Regression','Random Forest Regressor','Decision Tree Regressor']),
     dbc.Button("Predict Airfare", color="primary", id="button-train"),
 ]
 
+flight_count = dcc.Graph(figure=px.histogram(flights, x='Airline', title="Flight count by Airline"))
 
 # Define Layout
 app.layout = dbc.Container(
@@ -53,6 +57,22 @@ app.layout = dbc.Container(
                 dbc.Col([query_card], md=4),
             ]
         ),
+        html.H2("Additional flight information"),
+        html.Hr(),
+        dbc.Row(
+            [
+                dbc.Col([],md=3),
+                dbc.Col([flight_count], md=4),
+            ]
+
+        ),
+        dbc.Row(
+            [
+                dbc.Col([],md=3),
+                dbc.Col([flight_table], md=4),
+            ]
+
+        ),
     ],
     style={"margin": "auto"},
 )
@@ -61,7 +81,7 @@ app.layout = dbc.Container(
 @app.callback(
     [
         Output("alert-msg", "children"),
-        Output("sql-query", "children"),
+        Output("prediction", "children"),
     ],
     [Input("button-train", "n_clicks")],
     [
