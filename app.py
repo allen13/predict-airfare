@@ -11,6 +11,8 @@ import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 
 import plotly.express as px
+import plotly.graph_objects as go
+
 import pandas as pd
 
 from sklearn.linear_model import Ridge
@@ -44,8 +46,11 @@ query_card = dbc.Card(
     body=True,
 )
 
-flight_table = dbc.Table.from_dataframe(flights_model.flights.head(), striped=True, bordered=True, hover=True)
-sample_table = dbc.Table.from_dataframe(flights_model.test_flight_prices.head(), striped=True, bordered=True, hover=True)
+model_accuracy_data = flights_model.calculate_model_accuracy()
+model_accuracy_table = dbc.Table.from_dataframe(model_accuracy_data, striped=True, bordered=True, hover=True)
+
+most_expensive_flights = dbc.Table.from_dataframe(flights_model.flights.nlargest(10,'Price'), striped=True, bordered=True, hover=True)
+cheapest_flights = dbc.Table.from_dataframe(flights_model.flights.nsmallest(10,'Price'), striped=True, bordered=True, hover=True)
 
 controls = [
     OptionMenu(id="airline", label="Airline", values=flights_model.flights["Airline"].unique()),
@@ -59,8 +64,17 @@ controls = [
     OptionMenu(id="weekday", label="Day Of Week", values=flights_model.flights["Weekday"].unique()),
     dbc.Button("Predict Airfare", color="primary", id="button-train"),
 ]
+flight_count = dcc.Graph(
+    figure=px.histogram(flights_model.flights, x='Airline', title="Flight count by Airline"))
 
-flight_count = dcc.Graph(figure=px.histogram(flights_model.flights, x='Airline', title="Flight count by Airline"))
+feature_price_impact = dcc.Graph(figure=px.bar(
+            x=flights_model.feature_importance['importances'],
+            y=flights_model.feature_importance['features'],
+            labels={
+                'x':'Feature Importance %',
+                'y':'Features'},
+            orientation='h',
+            title='Feature Impact on Price'))
 
 def average_price_graph(column):
     mp = flights_model.flights[[column,"Price"]].groupby([column]).mean().reset_index()
@@ -79,6 +93,7 @@ app.layout = dbc.Container(
             [
                 dbc.Col([dbc.Card(controls, body=True),query_card,div_alert], md=3),
                 dbc.Col([flight_count,flight_cost_by_month], md=3),
+                dbc.Col([feature_price_impact,model_accuracy_table], md=3),
             ]
         ),
         html.H2("Additional flight information"),
@@ -86,7 +101,14 @@ app.layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col([],md=3),
-                dbc.Col([flight_table], md=4),
+                dbc.Col([html.Label("10 most expensive flights"),most_expensive_flights], md=4),
+            ]
+
+        ),
+        dbc.Row(
+            [
+                dbc.Col([],md=3),
+                dbc.Col([html.Label("10 cheapest flights"),cheapest_flights], md=4),
             ]
 
         ),
@@ -135,7 +157,7 @@ def query_and_train(n_clicks, airline, source, destination, total_stops, day, mo
     alert_msg = f"Queried 0 records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color="success", dismissable=True)
 
-    return alert, f"#### ${price:.2f} on {airline}"
+    return alert, f"#### ₹{price:.2f} on {airline}"
 
 
 if __name__ == "__main__":
