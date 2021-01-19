@@ -10,7 +10,6 @@ import dash_core_components as dcc
 import dash_bootstrap_components as dbc
 from dash.dependencies import Input, Output, State
 
-from flask_caching import Cache
 import plotly.express as px
 import pandas as pd
 
@@ -19,7 +18,7 @@ from sklearn.model_selection import train_test_split
 from sklearn import metrics
 
 from utils import *
-from load import *
+from train import *
 
 VALID_USERNAME_PASSWORD_PAIRS = {
     'user': 'users'
@@ -32,10 +31,8 @@ app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
 #     VALID_USERNAME_PASSWORD_PAIRS
 # )
 server = app.server
-
-flights = clean_flight_data(load_excel_data(FLIGHT_DATA))
-test_flights = clean_flight_data(load_excel_data(TEST_FLIGHT_DATA))
-test_flight_prices = load_excel_data(SAMPLE_FLIGHT_DATA)
+flights_model = FlightsModel()
+flights_model.load_models()
 
 # Build component parts
 div_alert = dbc.Spinner(html.Div(id="alert-msg"))
@@ -47,27 +44,26 @@ query_card = dbc.Card(
     body=True,
 )
 
-flight_table = dbc.Table.from_dataframe(flights.head(), striped=True, bordered=True, hover=True)
-sample_table = dbc.Table.from_dataframe(test_flight_prices.head(), striped=True, bordered=True, hover=True)
-test_flight_table = dbc.Table.from_dataframe(test_flights.head(), striped=True, bordered=True, hover=True)
+flight_table = dbc.Table.from_dataframe(flights_model.flights.head(), striped=True, bordered=True, hover=True)
+sample_table = dbc.Table.from_dataframe(flights_model.test_flight_prices.head(), striped=True, bordered=True, hover=True)
 
 controls = [
-    OptionMenu(id="airline", label="Airline", values=flights["Airline"].unique()),
-    OptionMenu(id="source", label="Source", values=flights["Source"].unique()),
-    OptionMenu(id="destination", label="Destination", values=flights["Destination"].unique()),
-    OptionMenu(id="depart", label="Departure", values=flights["Departure"].unique()),
-    OptionMenu(id="arrive", label="Arrival", values=flights["Arrival"].unique()),
-    OptionMenu(id="stops", label="Stops", values=flights["Total_Stops"].apply(str).unique()),
-    OptionMenu(id="day", label="Flight Day", values=flights["Day"].apply(str).unique()),
-    OptionMenu(id="month", label="Flight Month", values=flights["Month"].apply(str).unique()),
-    OptionMenu(id="dayofweek", label="Day Of Week", values=flights["Weekday"].unique()),
+    OptionMenu(id="airline", label="Airline", values=flights_model.flights["Airline"].unique()),
+    OptionMenu(id="source", label="Source", values=flights_model.flights["Source"].unique()),
+    OptionMenu(id="destination", label="Destination", values=flights_model.flights["Destination"].unique()),
+    OptionMenu(id="departure", label="Departure", values=flights_model.flights["Departure"].unique()),
+    OptionMenu(id="arrival", label="Arrival", values=flights_model.flights["Arrival"].unique()),
+    OptionMenu(id="total_stops", label="Stops", values=flights_model.flights["Total_Stops"].apply(str).unique()),
+    OptionMenu(id="day", label="Flight Day", values=flights_model.flights["Day"].apply(str).unique()),
+    OptionMenu(id="month", label="Flight Month", values=flights_model.flights["Month"].apply(str).unique()),
+    OptionMenu(id="weekday", label="Day Of Week", values=flights_model.flights["Weekday"].unique()),
     dbc.Button("Predict Airfare", color="primary", id="button-train"),
 ]
 
-flight_count = dcc.Graph(figure=px.histogram(flights, x='Airline', title="Flight count by Airline"))
+flight_count = dcc.Graph(figure=px.histogram(flights_model.flights, x='Airline', title="Flight count by Airline"))
 
 def average_price_graph(column):
-    mp = flights[[column,"Price"]].groupby([column]).mean().reset_index()
+    mp = flights_model.flights[[column,"Price"]].groupby([column]).mean().reset_index()
     return dcc.Graph(figure=px.bar(mp, x=column, y='Price', title="Average flight cost by " + column))
 
 
@@ -81,9 +77,8 @@ app.layout = dbc.Container(
         html.Hr(),
         dbc.Row(
             [
-                dbc.Col([dbc.Card(controls, body=True), div_alert], md=3),
-                dbc.Col([query_card], md=3),
-                dbc.Col([flight_count], md=4),
+                dbc.Col([dbc.Card(controls, body=True),query_card,div_alert], md=3),
+                dbc.Col([flight_count,flight_cost_by_month], md=3),
             ]
         ),
         html.H2("Additional flight information"),
@@ -91,15 +86,7 @@ app.layout = dbc.Container(
         dbc.Row(
             [
                 dbc.Col([],md=3),
-                dbc.Col([flight_count], md=4),
-                dbc.Col([flight_cost_by_month], md=4),
-            ]
-
-        ),
-        dbc.Row(
-            [
-                dbc.Col([],md=3),
-                dbc.Col([flight_table,test_flight_table,sample_table], md=4),
+                dbc.Col([flight_table], md=4),
             ]
 
         ),
@@ -116,17 +103,39 @@ app.layout = dbc.Container(
     [Input("button-train", "n_clicks")],
     [
         State("airline", "value"),
-        State("stops", "value"),
+        State("source", "value"),
+        State("destination", "value"),
+        State("total_stops", "value"),
+        State("day", "value"),
+        State("month", "value"),
+        State("weekday", "value"),
+        State("departure", "value"),
+        State("arrival", "value"),
     ],
 )
-def query_and_train(n_clicks, airline, stops):
+def query_and_train(n_clicks, airline, source, destination, total_stops, day, month, weekday, departure, arrival):
     t0 = time.time()
+
+    flight = {
+      'Airline': [airline], 
+      'Source': [source],
+      'Destination': [destination],
+      'Total_Stops': [int(total_stops)],
+      'Day': [int(day)],
+      'Month': [int(month)],
+      'Weekday': [weekday],
+      'Departure': [departure],
+      'Arrival': [arrival],
+    }
+
+    price = flights_model.predict_price(flight)
+
     t1 = time.time()
     exec_time = t1 - t0
     alert_msg = f"Queried 0 records. Total time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color="success", dismissable=True)
 
-    return alert, "#### $2123.30 " + airline
+    return alert, f"#### ${price:.2f} on {airline}"
 
 
 if __name__ == "__main__":
