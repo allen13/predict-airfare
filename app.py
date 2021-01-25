@@ -154,7 +154,7 @@ def query_and_train(n_clicks, airline, source, destination, total_stops, day, mo
 
     t1 = time.time()
     exec_time = t1 - t0
-    alert_msg = f"Queried 0 records. Total time: {exec_time:.2f}s."
+    alert_msg = f"Query time: {exec_time:.2f}s."
     alert = dbc.Alert(alert_msg, color="success", dismissable=True)
 
     return alert, f"#### ₹{price:.2f} on {airline}"

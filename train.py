@@ -140,6 +140,7 @@ class FlightsModel:
       return model_accuracy_data
 
 if __name__ == "__main__":
+  # use to update data models
   flights_model = FlightsModel()
   flights_model.train_models()
   # flights_model.load_models()
