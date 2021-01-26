@@ -23,15 +23,15 @@ from utils import *
 from train import *
 
 VALID_USERNAME_PASSWORD_PAIRS = {
-    'user': 'users'
+    'user': 'user'
 }
 
 # Define app
 app = dash.Dash(__name__, external_stylesheets=[dbc.themes.BOOTSTRAP])
-# auth = dash_auth.BasicAuth(
-#     app,
-#     VALID_USERNAME_PASSWORD_PAIRS
-# )
+auth = dash_auth.BasicAuth(
+    app,
+    VALID_USERNAME_PASSWORD_PAIRS
+)
 server = app.server
 flights_model = FlightsModel()
 flights_model.load_models()
