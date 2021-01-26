@@ -68,3 +68,4 @@ def part_of_day(time):
 
 if __name__ == "__main__":
     flights = clean_flight_data(load_excel_data(FLIGHT_DATA))
+    print(flights.head())
