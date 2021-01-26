@@ -125,7 +125,6 @@ class FlightsModel:
 
   def calculate_model_accuracy(self):
       y_train_pred = self.knn_model.predict(self.X_train)
-      y_test_pred = self.knn_model.predict(self.X_test)
 
       model_accuracy_data = pd.DataFrame(
         {
